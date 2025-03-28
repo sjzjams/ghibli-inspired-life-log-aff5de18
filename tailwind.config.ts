@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -52,6 +53,16 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
+				ghibli: {
+					blue: "#85C1E9",
+					green: "#A9DFBF", 
+					orange: "#FAD7A0",
+					pink: "#F5B7B1",
+					yellow: "#F9E79F",
+					lavender: "#D7BDE2",
+					cream: "#F5EEF8",
+					brown: "#D4AC91"
+				},
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
 					foreground: 'hsl(var(--sidebar-foreground))',
@@ -84,11 +95,36 @@ export default {
 					to: {
 						height: '0'
 					}
+				},
+				'float': {
+					'0%, 100%': {
+						transform: 'translateY(0)'
+					},
+					'50%': {
+						transform: 'translateY(-10px)'
+					}
+				},
+				'sway': {
+					'0%, 100%': {
+						transform: 'rotate(-3deg)'
+					},
+					'50%': {
+						transform: 'rotate(3deg)'
+					}
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				'float': 'float 6s ease-in-out infinite',
+				'sway': 'sway 6s ease-in-out infinite'
+			},
+			backgroundImage: {
+				'ghibli-gradient': 'linear-gradient(to bottom, #E0F7FA, #F5EEF8)',
+				'cloud-pattern': "url('/cloud-pattern.png')"
+			},
+			fontFamily: {
+				'ghibli': ['"Varela Round"', 'sans-serif'],
 			}
 		}
 	},
