@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { PlusCircle, Search, Calendar, Image } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 interface PhotoItem {
   id: number;
@@ -20,60 +21,77 @@ interface PhotoItem {
   category: string;
 }
 
+const API_URL = 'http://localhost:5000/api';
+
+// API functions
+const fetchPhotos = async (): Promise<PhotoItem[]> => {
+  const response = await fetch(`${API_URL}/gallery`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch photos');
+  }
+  return response.json();
+};
+
+const addPhoto = async (photo: Omit<PhotoItem, 'id'>): Promise<PhotoItem> => {
+  const response = await fetch(`${API_URL}/gallery`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(photo),
+  });
+  
+  if (!response.ok) {
+    throw new Error('Failed to add photo');
+  }
+  
+  return response.json();
+};
+
 const Gallery = () => {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoItem | null>(null);
+  const [isAddPhotoOpen, setIsAddPhotoOpen] = useState(false);
+  const [newPhoto, setNewPhoto] = useState({
+    title: '',
+    url: '',
+    category: '',
+    date: new Date().toISOString().split('T')[0]
+  });
   
-  // Sample photo data - in a real app this would come from a database
-  const photos: PhotoItem[] = [
-    {
-      id: 1,
-      url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb',
-      title: 'Playing in the park',
-      date: '2023-09-01',
-      category: 'Outdoors'
+  const queryClient = useQueryClient();
+  
+  // Fetch photos with React Query
+  const { data: photos = [], isLoading, error } = useQuery({
+    queryKey: ['photos'],
+    queryFn: fetchPhotos
+  });
+  
+  // Add photo mutation
+  const addPhotoMutation = useMutation({
+    mutationFn: addPhoto,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['photos'] });
+      toast({
+        title: "Photo added",
+        description: "Your photo has been added to the gallery",
+      });
+      setIsAddPhotoOpen(false);
+      resetPhotoForm();
     },
-    {
-      id: 2,
-      url: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05',
-      title: 'Morning hike',
-      date: '2023-09-05',
-      category: 'Adventure'
-    },
-    {
-      id: 3,
-      url: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843',
-      title: 'School project',
-      date: '2023-09-08',
-      category: 'School'
-    },
-    {
-      id: 4,
-      url: 'https://images.unsplash.com/photo-1472396961693-142e6e269027',
-      title: 'Zoo trip',
-      date: '2023-09-12',
-      category: 'Outdoors'
-    },
-    {
-      id: 5,
-      url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb',
-      title: 'Birthday party',
-      date: '2023-09-15',
-      category: 'Celebration'
-    },
-    {
-      id: 6,
-      url: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843',
-      title: 'Arts and crafts',
-      date: '2023-09-18',
-      category: 'Art'
-    },
-  ];
-
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to add photo",
+        variant: "destructive",
+      });
+    }
+  });
+  
   // Get unique categories for the filter dropdown
-  const categories = ['all', ...new Set(photos.map(photo => photo.category))];
+  const categories = ['all', ...new Set(photos.map(photo => photo.category).filter(Boolean))];
 
   // Filter photos based on search query and category
   const filteredPhotos = photos.filter(photo => {
@@ -90,6 +108,54 @@ const Gallery = () => {
       year: 'numeric'
     });
   };
+  
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setNewPhoto(prev => ({ ...prev, [name]: value }));
+  };
+  
+  const handleAddPhoto = () => {
+    if (!newPhoto.title || !newPhoto.url) {
+      toast({
+        title: "Missing information",
+        description: "Please provide both a title and image URL",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    addPhotoMutation.mutate(newPhoto);
+  };
+  
+  const resetPhotoForm = () => {
+    setNewPhoto({
+      title: '',
+      url: '',
+      category: '',
+      date: new Date().toISOString().split('T')[0]
+    });
+  };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <p className="text-muted-foreground">Loading gallery...</p>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-destructive mb-4">Error loading gallery</p>
+        <Button variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: ['photos'] })}>
+          Try Again
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -122,16 +188,81 @@ const Gallery = () => {
             <SelectContent>
               {categories.map(category => (
                 <SelectItem key={category} value={category}>
-                  {category.charAt(0).toUpperCase() + category.slice(1)}
+                  {category === 'all' ? 'All Categories' : category.charAt(0).toUpperCase() + category.slice(1)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           
-          <Button className="ghibli-button">
-            <PlusCircle className="h-4 w-4 mr-2" />
-            Add Photo
-          </Button>
+          <Dialog open={isAddPhotoOpen} onOpenChange={setIsAddPhotoOpen}>
+            <DialogTrigger asChild>
+              <Button className="ghibli-button">
+                <PlusCircle className="h-4 w-4 mr-2" />
+                Add Photo
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <div className="space-y-4 py-4">
+                <h2 className="text-xl font-semibold">Add New Photo</h2>
+                <div className="space-y-2">
+                  <label htmlFor="title" className="text-sm font-medium">Title</label>
+                  <Input
+                    id="title"
+                    name="title"
+                    placeholder="Photo title"
+                    value={newPhoto.title}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label htmlFor="url" className="text-sm font-medium">Image URL</label>
+                  <Input
+                    id="url"
+                    name="url"
+                    placeholder="https://example.com/image.jpg"
+                    value={newPhoto.url}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label htmlFor="category" className="text-sm font-medium">Category</label>
+                  <Input
+                    id="category"
+                    name="category"
+                    placeholder="e.g., Outdoors, Family"
+                    value={newPhoto.category}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label htmlFor="date" className="text-sm font-medium">Date</label>
+                  <Input
+                    id="date"
+                    name="date"
+                    type="date"
+                    value={newPhoto.date}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button variant="outline" onClick={() => setIsAddPhotoOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    className="ghibli-button" 
+                    onClick={handleAddPhoto}
+                    disabled={addPhotoMutation.isPending}
+                  >
+                    {addPhotoMutation.isPending ? 'Adding...' : 'Add Photo'}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </section>
 
@@ -140,14 +271,22 @@ const Gallery = () => {
           <Image className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
           <p className="text-muted-foreground mb-2">No photos found</p>
           <p className="text-sm text-muted-foreground/80 mb-4">
-            Try adjusting your search or filters
+            {searchQuery || categoryFilter !== 'all' 
+              ? 'Try adjusting your search or filters'
+              : 'Add your first photo to get started'}
           </p>
-          <Button variant="outline" onClick={() => {
-            setSearchQuery('');
-            setCategoryFilter('all');
-          }}>
-            Clear Filters
-          </Button>
+          {searchQuery || categoryFilter !== 'all' ? (
+            <Button variant="outline" onClick={() => {
+              setSearchQuery('');
+              setCategoryFilter('all');
+            }}>
+              Clear Filters
+            </Button>
+          ) : (
+            <Button className="ghibli-button" onClick={() => setIsAddPhotoOpen(true)}>
+              Add Your First Photo
+            </Button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
